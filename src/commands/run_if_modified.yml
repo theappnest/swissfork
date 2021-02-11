@@ -1,0 +1,71 @@
+description: Run steps if files are modified
+
+parameters:
+  base-branch:
+    description: The branch against which to check against. This can also be a commit SHA
+    type: string
+    default: master
+  use-divergence-point:
+    description: Find the divergence from the branch passed above, rather than the current HEAD
+    type: boolean
+    default: false
+  steps-to-run:
+    description: The steps to run if the files mentioned are modified
+    type: steps
+    default: []
+  pattern:
+    description: |
+      The regex to match files against. The command uses grep to search file names.
+      If you want to enforce starting with use ^. For checking if files in src/ or lib/ were modified,
+      the pattern to use would be ^src.*|^lib.*
+    type: string
+    default: .*
+  always-run-on-branch:
+    description: The branch to always run the steps on
+    type: string
+    default: ""
+  check-last-commit-on-base-branch:
+    description: |
+      This will make the check run for the latest commit on the base branch.
+    type: boolean
+    default: false
+
+steps:
+  - run:
+      name: Swissknife - Run if modified
+      command: |
+        if [ -z "$BASH" ]; then
+          echo Bash not installed.
+          exit 1
+        fi
+        git status >/dev/null 2>&1 || { echo >&2 "Not in a git directory or no git"; exit 1; }
+        circleci-agent >/dev/null 2>&1 || { echo >&2 "No Circle CI agent. These are in all Circle CI containers"; exit 1; }
+
+        if [ "$CIRCLE_BRANCH" == "<< parameters.always-run-on-branch >>" ]; then
+          echo "Should always run on << parameters.always-run-on-branch >>. Exiting and continuing to run"
+          exit 0;
+        fi
+
+        FINAL_GREP_FLAGS=${SWISSKNIFE_GREP_FLAGS:--i -E}
+        FILES_MODIFIED=""
+        setcommit () {
+          FILES_MODIFIED=$(git diff --name-only origin/<< parameters.base-branch >>..HEAD | grep $FINAL_GREP_FLAGS '<< parameters.pattern >>')
+          <<# parameters.use-divergence-point >>
+          FILES_MODIFIED=$(git diff --name-only $(git merge-base HEAD origin/<< parameters.base-branch >>)..HEAD | grep $FINAL_GREP_FLAGS '<< parameters.pattern >>')
+          <</ parameters.use-divergence-point >>
+          <<# parameters.check-last-commit-on-base-branch >>
+          if [[ "$CIRCLE_BRANCH" == "<< parameters.base-branch >>" ]]; then
+            FILES_MODIFIED=$(git diff --name-only HEAD HEAD~1 | grep $FINAL_GREP_FLAGS '<< parameters.pattern >>')
+          fi
+          <</ parameters.check-last-commit-on-base-branch >>
+        }
+
+        setcommit || true
+        if [ -z "$FILES_MODIFIED" ]
+        then
+          echo "Files not modified. Halting job"
+          circleci-agent step halt
+        else
+          echo "Files modified, continuing steps"
+        fi
+  - steps: << parameters.steps-to-run >>
