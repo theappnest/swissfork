@@ -1,0 +1,41 @@
+description: |
+  Triggers a pipeline on given branch. Also allows to installthe trigger script and not trigger into
+  /tmp/swissknife/trigger_pipeline.sh
+  it can be called with the arguments as follows
+  /tmp/swissknife/trigger_pipeline.sh vcstype username reponame branch '{"custom_params": "here"}'
+parameters:
+  repo-name:
+    type: env_var_name
+    description: The repo to trigger the workflow on
+    default: CIRCLE_PROJECT_REPONAME
+  user:
+    description: Username for the Github Project
+    type: env_var_name
+    default: CIRCLE_PROJECT_USERNAME
+  vcs-type:
+    description: What is the VCS for this project
+    type: string
+    default: github
+  branch:
+    description: The branch to trigger the pipeline on
+    type: env_var_name
+    default: CIRCLE_BRANCH
+  custom-parameters:
+    description: Custom parameters passed to the pipeline
+    type: string
+    default: "{}"
+  install-skip-trigger:
+    description: Adds the script to /tmp/swissknife/trigger_pipeline.sh and don't trigger flow
+    type: boolean
+    default: false
+steps:
+  - run:
+      name: Trigger pipeline
+      environment:
+        SKIP_TRIGGER: << parameters.install-skip-trigger >>
+        VCS_TYPE: << parameters.vcs-type >>
+        PARAM_USER_ENV_VAR: << parameters.user >>
+        PARAM_REPO_ENV_VAR: << parameters.repo-name >>
+        PARAM_BRANCH_ENV_VAR: << parameters.branch >>
+        CUSTOM_PARAMS: << parameters.custom-parameters >>
+      command: << include(../scripts/trigger-pipeline.sh) >>

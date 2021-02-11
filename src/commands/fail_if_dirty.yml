@@ -1,0 +1,60 @@
+description: |
+  Fail if git is dirty after running a set of steps.
+  For example running `go mod tidy` or `npm install` should not result in a dirty git directory.
+
+parameters:
+  steps-to-run:
+    description: The steps to run if the files mentioned are modified
+    type: steps
+    default: []
+  pattern:
+    description: |
+      The regex to match for dirty files. By default if any file is dirty the command fails. If overriden
+      can be used to check for only say `package-lock.json` or `go.mod`.
+    type: string
+    default: .*
+  invert-pattern:
+    description: |
+      Use the invert of the pattern above. Defaults to false. This orb uses grep to search so setting invert
+      uses the -v command.
+    type: boolean
+    default: false
+  custom-error-message:
+    description: The error message to fail with if git is directory.
+    type: string
+    default: Files modified, failing
+  print-modified-files:
+    description: Whether to print the list of modified files.
+    type: boolean
+    default: false
+
+steps:
+  - steps: << parameters.steps-to-run >>
+  - run:
+      name: Swissknife - Fail if git dirty
+      command: |
+        if [ -z "$BASH" ]; then
+          echo Bash not installed.
+          exit 1
+        fi
+        git status >/dev/null 2>&1 || { echo >&2 "Not in a git directory or no git"; exit 1; }
+
+        FINAL_GREP_FLAGS=${SWISSKNIFE_GREP_FLAGS:--i -E}
+        FILES_MODIFIED=""
+        setcommit () {
+          FILES_MODIFIED=$(git status -s | grep <<# parameters.invert-pattern >> -v <</ parameters.invert-pattern >> $FINAL_GREP_FLAGS '<< parameters.pattern >>')
+        }
+
+        setcommit || true
+        if [ -z "$FILES_MODIFIED" ]
+        then
+          echo "Files not modified. continuing"
+          exit 0;
+        else
+          <<# parameters.print-modified-files >>
+          echo "The files that have been modified are:"
+          echo $FILES_MODIFIED
+          <</ parameters.print-modified-files >>
+          echo "<< parameters.custom-error-message >>"
+          exit 1;
+        fi
