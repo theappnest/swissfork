@@ -11,13 +11,16 @@ orbs:
 ## These parameters are used internally by orb-tools. Skip to the Jobs section.
 parameters:
   run-integration-tests:
-    description: An internal flag to prevent integration test from running before a development version has been created.
+    description:
+      An internal flag to prevent integration test from running before a
+      development version has been created.
     type: boolean
     default: false
   dev-orb-version:
     description: >
-      The development version of the orb to test.
-      This value is automatically adjusted by the "trigger-integration-tests-workflow" job to correspond with the specific version created by the commit and should not be edited.
+      The development version of the orb to test. This value is automatically
+      adjusted by the "trigger-integration-tests-workflow" job to correspond
+      with the specific version created by the commit and should not be edited.
       A "dev:alpha" version must exist for the initial pipeline run.
     type: string
     default: "dev:alpha"
@@ -29,10 +32,6 @@ jobs:
       - image: cimg/base:stable
     steps:
       - checkout
-      # "greet" is a sample command packaged with this orb config.
-      # This sample integration test will run as long as the greet command exists. Once you remove the greet command you should remove this line.
-      # Push new changes first, before adding new tests to your config.
-      - swissfork/greet
 
 workflows:
   # Prior to producing a development orb (which requires credentials) basic validation, linting, and even unit testing can be performed.
