@@ -79,8 +79,12 @@ steps:
 
         get_workflow_start_time() {
           wf_url="https://circleci.com/api/v2/workflow/$1?circle-token=${CIRCLE_TOKEN}"
-          curl -f -s "$wf_url" > /tmp/swissknife/"wf_$1".json
+          sleep 30
+          curl -v "$wf_url" > /tmp/swissknife/"wf_$1".json
+          echo "DEBUG:"
+          cat /tmp/swissknife/"wf_$1".json
           workflow_start_time=$(jq '.created_at' /tmp/swissknife/"wf_$1".json)
+          echo "Workflow start time: ${workflow_start_time}"
         }
 
         get_num_running_workflows() {
@@ -91,7 +95,8 @@ steps:
             running_jobs_branch="/tree/$branch_to_consider"
           fi
           running_jobs_url="${running_job_prefix}${running_jobs_branch}${running_jobs_suffix}"
-          curl -f -s "$running_jobs_url" > /tmp/swissknife/running_jobs.json
+          sleep 30
+          curl -v "$running_jobs_url" > /tmp/swissknife/running_jobs.json
           total_workflows_running=$(jq --arg curworkflow "$CIRCLE_WORKFLOW_ID" '[unique_by(.workflows.workflow_id) | .[] | select(.workflows.workflow_name|test("<< parameters.workflow-name >>")) | select(.workflows.workflow_id|test($curworkflow)|not) ] | length' /tmp/swissknife/running_jobs.json)
           # If no other workflows are running, we're good. just return
           if [ "$total_workflows_running" == "0" ]; then
