@@ -97,6 +97,7 @@ steps:
           running_jobs_url="${running_job_prefix}${running_jobs_branch}${running_jobs_suffix}"
           sleep 30
           curl -v "$running_jobs_url" > /tmp/swissknife/running_jobs.json
+          cat /tmp/swissknife/running_jobs.json
           total_workflows_running=$(jq --arg curworkflow "$CIRCLE_WORKFLOW_ID" '[unique_by(.workflows.workflow_id) | .[] | select(.workflows.workflow_name|test("<< parameters.workflow-name >>")) | select(.workflows.workflow_id|test($curworkflow)|not) ] | length' /tmp/swissknife/running_jobs.json)
           # If no other workflows are running, we're good. just return
           if [ "$total_workflows_running" == "0" ]; then
