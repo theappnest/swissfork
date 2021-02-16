@@ -112,7 +112,7 @@ steps:
             echo "Checking info for workflow:$line"
             get_workflow_start_time "$line"
             running_wf_start_time=$workflow_start_time
-            if [[ $running_wf_start_time <= $current_workflow_start_time ]]; then
+            if [[ $running_wf_start_time = $current_workflow_start_time ]]; then
               can_i_run="false"
               break
             fi
