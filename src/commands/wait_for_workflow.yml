@@ -137,7 +137,7 @@ steps:
             curl -s --request GET --url "$wf_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/"wf_$1"_finished.json
             finished_wf_status=$(jq .status < /tmp/swissknife/"wf_$1"_finished.json)
             if [[ $finished_wf_status != "success" ]]; then
-              echo "workflow we were waiting for has failed, exiting. This pipeline will not continue."
+              echo "Workflow we were waiting for has failed, exiting. This pipeline will not continue."
               exit 1
             fi
 
