@@ -43,7 +43,7 @@ steps:
   - run:
       name: Swissknife - Wait for workflows
       command: |
-        if [ ! -z "$CIRCLECI_DEBUG"]; then
+        if [ ! -z "$CIRCLECI_DEBUG" ]; then
           set -o xtrace
         fi
 
