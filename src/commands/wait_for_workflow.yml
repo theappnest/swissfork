@@ -135,7 +135,7 @@ steps:
           if [[ $total_workflows_running == "0" || $can_i_run == "true" ]]; then
             # Check if workflow we have waited for finished successfully.
             curl -s --request GET --url "$wf_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/"wf_$1"_finished.json
-            finished_wf_status=$(jq .status < /tmp/swissknife/"wf_$1"_finished.json)
+            finished_wf_status=$(jq --raw-output .status < /tmp/swissknife/"wf_$1"_finished.json)
             if [[ $finished_wf_status != "success" ]]; then
               echo "Workflow we were waiting for has failed, exiting. This pipeline will not continue."
               exit 1
