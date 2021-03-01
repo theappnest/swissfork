@@ -79,6 +79,9 @@ steps:
         # This is a global variable used to get return value for get_workflow_start_time
         workflow_start_time=""
 
+        # Workaround of an issue where wf_url was empty because there were no jobs running.
+        wf_url="https://circleci.com/api/v2/workflow/${CIRCLE_WORKFLOW_ID}"
+
         get_workflow_start_time() {
           wf_url="https://circleci.com/api/v2/workflow/$1"
           curl -s --request GET --url "$wf_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/"wf_$1".json
