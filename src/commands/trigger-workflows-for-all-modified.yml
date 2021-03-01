@@ -164,7 +164,7 @@ steps:
         append_to_params() {
           touch /tmp/swissknife/params_exist
           current_data=`cat /tmp/swissknife/workflow_params.json`
-          echo $current_data | jq --arg param $1 '. + {($param): true}' | jq -cr '' > /tmp/swissknife/workflow_params.json
+          echo $current_data | jq --arg param $1 --arg value $2 '. + {($param): $value}' | jq -cr '' > /tmp/swissknife/workflow_params.json
         }
 
         trigger_workflow() {
@@ -210,12 +210,13 @@ steps:
               if [ -z "$FILES_MODIFIED" ]
               then
                 echo "Files not modified for $param_name";
+                append_to_params $param_name skip
               else
                 echo "Files modified for $param_name"
                 echo "$FILES_MODIFIED"
                 echo "appending param to list of inputs"
                 echo ""
-                append_to_params $param_name
+                append_to_params $param_name run
 
                 echo "Current Params:"
                 cat /tmp/swissknife/workflow_params.json
@@ -233,10 +234,10 @@ steps:
               regex=$(echo "$mod" | jq -r '.regex')
               param_name=$(echo "$mod" | jq -r '.param_name')
 
-              append_to_params $param_name
+              append_to_params $param_name run
 
               echo "Current Params:"
-              cat /tmp/swissknife/workflow_params.json
+              jq . /tmp/swissknife/workflow_params.json
               echo ""
           done
         }
