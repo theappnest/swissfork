@@ -43,7 +43,7 @@ steps:
   - run:
       name: Swissknife - Wait for workflows
       command: |
-        if [ ! -z "$CIRCLECI_DEBUG" ]; then
+        if [ -n "$CIRCLECI_DEBUG" ]; then
           set -o xtrace
         fi
 
@@ -57,7 +57,7 @@ steps:
           exit 1
         }
 
-        if [[ $CIRCLE_TOKEN == "" ]]; then
+        if [[ -z "$CIRCLE_TOKEN" ]]; then
           echo "CIRCLE_TOKEN not set. Set a token to access the circle API in the env var CIRCLE_TOKEN"
           exit 1
         fi
@@ -84,20 +84,23 @@ steps:
 
         get_workflow_start_time() {
           wf_url="https://circleci.com/api/v2/workflow/$1"
-          curl -s --request GET --url "$wf_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/"wf_$1".json
-          workflow_start_time=$(jq '.created_at' /tmp/swissknife/"wf_$1".json)
+          curl -s --request GET --url "$wf_url" --header "Circle-Token: $CIRCLE_TOKEN" > /tmp/swissknife/"wf_$1".json
+          workflow_start_time=$(jq '.created_at' "/tmp/swissknife/wf_${1}.json")
         }
 
         get_num_running_workflows() {
-          running_job_prefix="https://circleci.com/api/v1.1/project/$slug"
+          running_job_prefix="https://circleci.com/api/v1.1/project/${slug}"
           running_jobs_suffix="?filter=running&limit=100"
           running_jobs_branch=""
-          if [[ $branch_to_consider != "all" ]]; then
-            running_jobs_branch="/tree/$branch_to_consider"
+
+          if [[ "$branch_to_consider" != "all" ]]; then
+            running_jobs_branch="/tree/${branch_to_consider}"
           fi
+
           running_jobs_url="${running_job_prefix}${running_jobs_branch}${running_jobs_suffix}"
-          curl -s --request GET --url "$running_jobs_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/running_jobs.json
+          curl -s --request GET --url "$running_jobs_url" --header "Circle-Token: $CIRCLE_TOKEN" > /tmp/swissknife/running_jobs.json
           total_workflows_running=$(jq --arg curworkflow "$CIRCLE_WORKFLOW_ID" '[unique_by(.workflows.workflow_id) | .[] | select(.workflows.workflow_name|test("<< parameters.workflow-name >>")) | select(.workflows.workflow_id|test($curworkflow)|not) ] | length' /tmp/swissknife/running_jobs.json)
+
           # If no other workflows are running, we're good. just return
           if [ "$total_workflows_running" == "0" ]; then
             return 0
@@ -107,14 +110,14 @@ steps:
           jq -r --arg curworkflow "$CIRCLE_WORKFLOW_ID" 'unique_by(.workflows.workflow_id) | .[] | select(.workflows.workflow_name|test("<< parameters.workflow-name >>")) | select(.workflows.workflow_id|test($curworkflow)|not) | .workflows.workflow_id' /tmp/swissknife/running_jobs.json > /tmp/swissknife/running_workflows.txt
 
           get_workflow_start_time "$CIRCLE_WORKFLOW_ID"
-          current_workflow_start_time=$workflow_start_time
+          current_workflow_start_time="$workflow_start_time"
 
           can_i_run="true"
           while IFS= read -r line; do
             echo -e "\nChecking info for workflow: $line"
             get_workflow_start_time "$line"
             running_wf_start_time=$workflow_start_time
-            if [[ $running_wf_start_time = $current_workflow_start_time ]]; then
+            if [[ "$running_wf_start_time" = "$current_workflow_start_time" ]]; then
               can_i_run="false"
               break
             fi
@@ -122,9 +125,9 @@ steps:
         }
 
         kill_workflow() {
-          echo "Cancelling workflow by cancelling build ${CIRCLE_BUILD_NUM}"
-          cancel_workflow_url="https://circleci.com/api/v1.1/project/$slug/${CIRCLE_BUILD_NUM}/cancel"
-          curl -s -request POST --url "$cancel_workflow_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /dev/null
+          echo "Cancelling workflow by cancelling build $CIRCLE_BUILD_NUM"
+          cancel_workflow_url="https://circleci.com/api/v1.1/project/${slug}/${CIRCLE_BUILD_NUM}/cancel"
+          curl -s -request POST --url "$cancel_workflow_url" --header "Circle-Token: $CIRCLE_TOKEN" > /dev/null
           # Give Circle CI enough time to kill this workflow
           sleep 30
           # If the job wasn't cancelled in 30 seconds fail.
@@ -133,15 +136,31 @@ steps:
 
         current_wait_time=0
 
+        WORKFLOW_STATE_FAIL="(not_run|failed|error|failing|on_hold|canceled|unauthorized)"
+
         while true; do
           get_num_running_workflows
-          if [[ $total_workflows_running == "0" || $can_i_run == "true" ]]; then
+          wf_output_file="/tmp/swissknife/wf_${CIRCLE_WORKFLOW_ID}_finished.json"
+
+          if [[ "$total_workflows_running" == "0" || $can_i_run == "true" ]]; then
             # Check if workflow we have waited for finished successfully.
-            curl -s --request GET --url "$wf_url" --header "Circle-Token: ${CIRCLE_TOKEN}" > /tmp/swissknife/"wf_$1"_finished.json
-            finished_wf_status=$(jq --raw-output .status < /tmp/swissknife/"wf_$1"_finished.json)
-            if [[ $finished_wf_status != "success" ]]; then
-              echo "Workflow we were waiting for has failed, exiting. This pipeline will not continue."
+            curl -s --request GET --url "$wf_url" --header "Circle-Token: $CIRCLE_TOKEN" > "$wf_output_file"
+            finished_wf_status=$(jq --raw-output .status < "$wf_output_file")
+            cat "$wf_output_file"
+
+            if [[ "$finished_wf_status" =~ $WORKFLOW_STATE_FAIL ]]; then
+              echo "Workflow we were waiting for has finished in erroneous state (${finished_wf_status}), exiting. This pipeline will not continue."
               exit 1
+            fi
+
+            # There can be situation when more than 100 jobs run at the time.
+            # Should that happen there is a chance that total_workflows_running will be 0 even though job is actually still running.
+            # State of that job it will be `running` so we need to wait longer.
+            if [[ "$finished_wf_status" == "running" ]]; then
+               echo "We most likely have hit API jobs response count limit. Workflow we are waiting for reports that it is still running. Let's wait some more."
+               echo "Already slept for ${current_wait_time}s (out of << parameters.max-wait-time >>s limit), going to sleep for << parameters.sleep-time-between-checks >>s before retrying."
+               sleep "<< parameters.sleep-time-between-checks >>"
+               current_wait_time=$(( current_wait_time + << parameters.sleep-time-between-checks >> ))
             fi
 
             echo "No other workflows detected. Releasing hold."
